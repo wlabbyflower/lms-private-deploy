@@ -1,0 +1,8 @@
+lms.env
+.venv-tutor/
+openedx/tutor-root/
+
+*.log
+*.pem
+*.key
+*.crt

@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${ROOT}/scripts/lib-i18n.sh"
+lms_load_env_language "${ROOT}/lms.env"
+
 if [ "${EUID}" -ne 0 ]; then
   exec sudo -E bash "$0" "$@"
 fi
 
 if ! command -v apt-get >/dev/null 2>&1; then
-  echo "This installer expects a Debian/Ubuntu host with apt-get." >&2
+  lms_msg \
+    "This installer expects a Debian/Ubuntu host with apt-get." \
+    "此安装脚本需要带 apt-get 的 Debian/Ubuntu 主机。" >&2
   exit 1
 fi
 
@@ -42,7 +48,19 @@ fi
 docker --version
 docker compose version
 
-cat <<EOF
+if lms_is_zh; then
+  cat <<EOF
+
+Docker 已安装。
+
+如果这是第一次把 ${target_user} 加入 docker 组，请执行：
+  newgrp docker
+
+然后测试：
+  docker run --rm hello-world
+EOF
+else
+  cat <<EOF
 
 Docker is installed.
 
@@ -52,3 +70,4 @@ If this is the first time ${target_user} was added to the docker group, run:
 Then test:
   docker run --rm hello-world
 EOF
+fi

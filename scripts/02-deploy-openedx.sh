@@ -5,23 +5,40 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ROOT}/lms.env"
 TUTOR_VENV="${ROOT}/.venv-tutor"
 TUTOR_ROOT="${ROOT}/openedx/tutor-root"
+LMS_LANG_FROM_SHELL="${LMS_LANG-}"
+source "${ROOT}/scripts/lib-i18n.sh"
+lms_load_env_language "${ENV_FILE}"
 source "${ROOT}/scripts/lib-docker-group.sh"
 
 if ! command -v docker >/dev/null 2>&1; then
-  echo "docker is not installed. Run: ${ROOT}/scripts/00-install-docker.sh" >&2
+  lms_msg \
+    "docker is not installed. Run: ${ROOT}/scripts/00-install-docker.sh" \
+    "尚未安装 docker。请执行：${ROOT}/scripts/00-install-docker.sh" >&2
   exit 1
 fi
 
 ensure_docker_access "$@"
 
 if ! python3 -m venv --help >/dev/null 2>&1; then
-  echo "python3-venv is missing. Run: ${ROOT}/scripts/00-install-docker.sh" >&2
+  lms_msg \
+    "python3-venv is missing. Run: ${ROOT}/scripts/00-install-docker.sh" \
+    "缺少 python3-venv。请执行：${ROOT}/scripts/00-install-docker.sh" >&2
+  exit 1
+fi
+
+if [ ! -f "${ENV_FILE}" ]; then
+  lms_msg \
+    "Missing ${ENV_FILE}. Copy lms.env.example to lms.env, replace NEW_IP, and set fresh passwords." \
+    "缺少 ${ENV_FILE}。请先复制 lms.env.example 为 lms.env，替换 NEW_IP，并设置新密码。" >&2
   exit 1
 fi
 
 set -a
 source "${ENV_FILE}"
 set +a
+if [ -n "${LMS_LANG_FROM_SHELL}" ]; then
+  export LMS_LANG="${LMS_LANG_FROM_SHELL}"
+fi
 
 OPENEDX_HTTP_BIND="${OPENEDX_HTTP_BIND:-${OPENEDX_HTTP_PORT:-80}}"
 OPENEDX_LMS_URL="${OPENEDX_LMS_URL:-http://${OPENEDX_LMS_HOST}}"
@@ -97,14 +114,40 @@ PY
 if "${TUTOR}" local do createuser --help 2>/dev/null | grep -q -- "--password"; then
   "${TUTOR}" local do createuser --staff --superuser --password "${OPENEDX_ADMIN_PASSWORD}" "${OPENEDX_ADMIN_USER}" "${OPENEDX_ADMIN_EMAIL}" || true
 else
-  cat <<EOF
+  if lms_is_zh; then
+    cat <<EOF
+
+请交互式创建 Open edX 管理员用户：
+  TUTOR_ROOT=${TUTOR_ROOT} ${TUTOR} local do createuser --staff --superuser ${OPENEDX_ADMIN_USER} ${OPENEDX_ADMIN_EMAIL}
+EOF
+  else
+    cat <<EOF
 
 Create the Open edX admin user interactively:
   TUTOR_ROOT=${TUTOR_ROOT} ${TUTOR} local do createuser --staff --superuser ${OPENEDX_ADMIN_USER} ${OPENEDX_ADMIN_EMAIL}
 EOF
+  fi
 fi
 
-cat <<EOF
+if lms_is_zh; then
+  cat <<EOF
+
+Open edX 正在启动。首次启动需要拉取镜像并执行迁移，耗时可能较长。
+
+LMS：
+  ${OPENEDX_LMS_URL}
+
+Studio：
+  ${OPENEDX_CMS_URL}
+
+Tutor root：
+  ${TUTOR_ROOT}
+
+管理员密码保存在：
+  ${ENV_FILE}
+EOF
+else
+  cat <<EOF
 
 Open edX is starting. First launch can take a long time while images are pulled and migrations run.
 
@@ -120,3 +163,4 @@ Tutor root:
 Admin password is stored in:
   ${ENV_FILE}
 EOF
+fi
